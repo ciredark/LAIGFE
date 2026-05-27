@@ -2,7 +2,10 @@
 
 **"Idiot-Proof Push-Button Deployment"** for a fully private, uncensored AI companion.
 
-**LAIGFE** stands for **Local AI Girlfriend Experience** (also playfully known as *Local AI Gooner Friendly Experience* or *Local AI Generator for EVERYTHING*).
+**LAIGFE** stands for **Local AI Girlfriend Experience** 
+also playfully known as: 
+*Local AI Gooner Friendly Enviroment* or 
+*Local AI Generator for EVERYTHING*.
 
 ## What is it?
 
