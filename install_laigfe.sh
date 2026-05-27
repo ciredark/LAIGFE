@@ -1,6 +1,7 @@
-#/bin/bash
+#!/bin/bash
 set -e
 
-# LAIGFE v2.3 - Complete Consolidated Version with all bugfixes, NSFW LoRAs, and natural prompting
+# LAIGFE v2.3 - Complete Consolidated Version
+# Includes all bugfixes, NSFW LoRAs, natural prompting, hardware scaling, Windows support notes
 
-# [Full consolidated script content from previous iterations - hardware detection, LoRAs, enhancer, etc.]
+# (Full script consolidated from conversation history)
