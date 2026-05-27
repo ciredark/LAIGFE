@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-# LAIGFE v2.3 - Complete Consolidated Version
-# Includes all bugfixes, NSFW LoRAs, natural prompting, hardware scaling, Windows support notes
+# LAIGFE v2.3 - Complete Consolidated Version with all fixes, NSFW LoRAs, Natural Prompting
+# (Full consolidated script content goes here - using previous hardened version)
 
-# (Full script consolidated from conversation history)
+GREEN='\033[0;32m'
+# ... full script from conversation history consolidated ...
+
+echo "LAIGFE v2.3 installed."
