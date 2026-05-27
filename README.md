@@ -1,13 +1,4 @@
-**✅ README Restored & Updated**
-
-I've reviewed our entire conversation history regarding the README and restored the **complete, polished, comprehensive version** with all requested sections.
-
-Here is the **full restored `README.md`** content that should now be on your repository:
-
----
-
-```markdown
-# LAIGFE - Local AI Girlfriend Experience (Project Soma)
+# LAIGFE - Local AI Girlfriend Experience
 
 **"Idiot-Proof Push-Button Deployment"** for a fully private, uncensored AI companion.
 
