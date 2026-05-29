@@ -219,13 +219,13 @@ if __name__ == "__main__":
 '@
 $MemoryScript | Out-File -FilePath "$ROOT_DIR\Memories\memory_harden.py" -Encoding utf8
 
-# CRITICAL: Clean left-alignment for terminator prevents ParserErrors
-$EnhancerScript = @"
+# LITERAL HERE-STRING PREVENTS DYNAMIC EVALUATION BREAKS AT PARSE TIME
+$EnhancerScript = @'
 import re, sys, os
 def enhance(text):
     t = text.lower()
     loras = []
-    suffix = os.getenv('LORA_SUFFIX', '$LORA_SUFFIX')
+    suffix = os.getenv('LORA_SUFFIX', '__LORA_SUFFIX__')
     if re.search(r'lift.*shirt|flash|expos', t): loras.append(f"<lora:shirtlift_{suffix}:0.8>")
     if re.search(r'missionary|on her back', t): loras.append(f"<lora:missionary_{suffix}:0.85>")
     if re.search(r'doggy|from behind|all fours', t): loras.append(f"<lora:doggy_{suffix}:0.85>")
@@ -240,7 +240,8 @@ def enhance(text):
     return text + ' ' + ' '.join(loras)
 if __name__ == '__main__':
     print(enhance(sys.stdin.read().strip()))
-"@
+'@
+$EnhancerScript = $EnhancerScript.Replace('__LORA_SUFFIX__', $LORA_SUFFIX)
 $EnhancerScript | Out-File -FilePath "$ROOT_DIR\enhance_prompt.py" -Encoding utf8
 
 # === 7. Building Toolchains & Local Virtual Env Compilations ===
@@ -255,7 +256,6 @@ if ($GATEWAY -ne "cloud") {
     $CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release"
     if ($nvidia) { $CMAKE_ARGS += " -DGGML_CUDA=ON" } else { $CMAKE_ARGS += " -DGGML_NATIVE=ON" }
     
-    # Check if cmake is globally exposed before executing compilation step
     if (Get-Command cmake -ErrorAction SilentlyContinue) {
         Start-Process cmake -ArgumentList ".. $CMAKE_ARGS" -NoNewWindow -Wait
         Start-Process cmake -ArgumentList "--build . --config Release -j $env:NUMBER_OF_PROCESSORS" -NoNewWindow -Wait
@@ -292,20 +292,19 @@ if ($GATEWAY -ne "cloud") {
 # === 8. Robust Multi-Modal Lifecycle Engine Runner Generation ===
 Log "Assembling Windows native management launcher..."
 
-# CRITICAL: Left-aligned terminator ensures absolute stability across all hosts
-$LauncherContent = @"
-`$ROOT_DIR = `$PSScriptRoot
-`$LOG_DIR = Join-Path `$ROOT_DIR "logs"
-`$STATE_FILE = Join-Path `$LOG_DIR "tts_state.flag"
+$LauncherContent = @'
+$ROOT_DIR = $PSScriptRoot
+$LOG_DIR = Join-Path $ROOT_DIR "logs"
+$STATE_FILE = Join-Path $LOG_DIR "tts_state.flag"
 
-if (-not (Test-Path `$STATE_FILE)) { "$DEFAULT_TTS" | Out-File -FilePath `$STATE_FILE -Encoding ascii }
+if (-not (Test-Path $STATE_FILE)) { "__DEFAULT_TTS__" | Out-File -FilePath $STATE_FILE -Encoding ascii }
 
-`$env:DATA_DIR = Join-Path `$ROOT_DIR "config_ui"
-`$env:ENABLE_IMAGE_GENERATION = "True"
-`$env:IMAGE_GENERATION_ENGINE = "comfyui"
-`$env:COMFYUI_BASE_URL = "http://127.0.0.1:8188"
-`$env:LORA_SUFFIX = "$LORA_SUFFIX"
-`$env:ROOT_DIR = `$ROOT_DIR
+$env:DATA_DIR = Join-Path $ROOT_DIR "config_ui"
+$env:ENABLE_IMAGE_GENERATION = "True"
+$env:IMAGE_GENERATION_ENGINE = "comfyui"
+$env:COMFYUI_BASE_URL = "http://127.0.0.1:8188"
+$env:LORA_SUFFIX = "__LORA_SUFFIX__"
+$env:ROOT_DIR = $ROOT_DIR
 
 function CleanupJobs {
     Write-Host "Closing background backend service processes cleanly..." -ForegroundColor Yellow
@@ -313,34 +312,34 @@ function CleanupJobs {
 }
 
 Write-Host "Starting background model runtimes..." -ForegroundColor Cyan
-if ("$GATEWAY" -ne "cloud") {
-    `$LlamaPath = Join-Path `$ROOT_DIR "engines\llama.cpp\build\bin\Release\llama-server.exe"
-    if (-not (Test-Path `$LlamaPath)) {
-        `$LlamaPath = Join-Path `$ROOT_DIR "engines\llama.cpp\build\bin\llama-server.exe"
+if ("__GATEWAY__" -ne "cloud") {
+    $LlamaPath = Join-Path $ROOT_DIR "engines\llama.cpp\build\bin\Release\llama-server.exe"
+    if (-not (Test-Path $LlamaPath)) {
+        $LlamaPath = Join-Path $ROOT_DIR "engines\llama.cpp\build\bin\llama-server.exe"
     }
 
     Start-Job -ScriptBlock {
-        param(`$path, `$model)
-        & `$path -m "`$path\..\..\..\..\models\llm\`$model" --port 6118 --host 127.0.0.1 -ngl $N_GL -c $CONTEXT --parallel 1 --flash-attn auto
-    } -ArgumentList `$LlamaPath, "$LLM_NAME" -Name "LLAMACPP" | Out-Null
+        param($path, $model)
+        & $path -m "$path\..\..\..\..\models\llm\$model" --port 6118 --host 127.0.0.1 -ngl __N_GL__ -c __CONTEXT__ --parallel 1 --flash-attn auto
+    } -ArgumentList $LlamaPath, "__LLM_NAME__" -Name "LLAMACPP" | Out-Null
 
     Start-Job -ScriptBlock {
-        param(`$root)
-        . (Join-Path `$root "envs\comfyui-env\Scripts\activate.ps1")
-        python (Join-Path `$root "engines\ComfyUI\main.py") --port 8188 --listen 127.0.0.1 --input-directory (Join-Path `$root "models") --output-directory (Join-Path `$root "media_out")
-    } -ArgumentList `$ROOT_DIR -Name "COMFYUI" | Out-Null
+        param($root)
+        . (Join-Path $root "envs\comfyui-env\Scripts\activate.ps1")
+        python (Join-Path $root "engines\ComfyUI\main.py") --port 8188 --listen 127.0.0.1 --input-directory (Join-Path $root "models") --output-directory (Join-Path $root "media_out")
+    } -ArgumentList $ROOT_DIR -Name "COMFYUI" | Out-Null
 }
 
 Start-Job -ScriptBlock {
-    param(`$root)
-    `$env:OPENAI_API_BASE_URL = "http://127.0.0.1:6118/v1"
-    `$env:OPENAI_API_KEY = "sk-laigfe"
-    `$env:ENABLE_IMAGE_GENERATION = "True"
-    `$env:IMAGE_GENERATION_ENGINE = "comfyui"
-    `$env:COMFYUI_BASE_URL = "http://127.0.0.1:8188"
-    . (Join-Path `$root "envs\openwebui-env\Scripts\activate.ps1")
+    param($root)
+    $env:OPENAI_API_BASE_URL = "http://127.0.0.1:6118/v1"
+    $env:OPENAI_API_KEY = "sk-laigfe"
+    $env:ENABLE_IMAGE_GENERATION = "True"
+    $env:IMAGE_GENERATION_ENGINE = "comfyui"
+    $env:COMFYUI_BASE_URL = "http://127.0.0.1:8188"
+    . (Join-Path $root "envs\openwebui-env\Scripts\activate.ps1")
     open-webui serve --host 127.0.0.1 --port 8080
-} -ArgumentList `$ROOT_DIR -Name "OPENWEBUI" | Out-Null
+} -ArgumentList $ROOT_DIR -Name "OPENWEBUI" | Out-Null
 
 Write-Host "`n====================================================================" -ForegroundColor Green
 Write-Host "🎯 LAIGFE Multi-Modal Suite (v2.8) Initialized" -ForegroundColor Green
@@ -349,18 +348,27 @@ Write-Host "➡️ Stop the entire stack at any time by pressing Ctrl+C" -Foregr
 Write-Host "====================================================================`n"
 
 try {
-    while (`$true) {
+    while ($true) {
         Start-Sleep -Seconds 2
-        if (Test-Path (Join-Path `$LOG_DIR "openwebui.log")) {
-            `$last_line = Get-Content (Join-Path `$LOG_DIR "openwebui.log") -Tail 1
-            if (`$last_line -like "*[VOICE_OFF]*") { "False" | Out-File -FilePath `$STATE_FILE -Encoding ascii }
-            if (`$last_line -like "*[VOICE_ON]*") { "True" | Out-File -FilePath `$STATE_FILE -Encoding ascii }
+        if (Test-Path (Join-Path $LOG_DIR "openwebui.log")) {
+            $last_line = Get-Content (Join-Path $LOG_DIR "openwebui.log") -Tail 1
+            if ($last_line -like "*[VOICE_OFF]*") { "False" | Out-File -FilePath $STATE_FILE -Encoding ascii }
+            if ($last_line -like "*[VOICE_ON]*") { "True" | Out-File -FilePath $STATE_FILE -Encoding ascii }
         }
     }
 } finally {
     CleanupJobs
 }
-"@
+'@
+
+# Safe out-of-band string injection token swapping
+$LauncherContent = $LauncherContent.
+    Replace('__DEFAULT_TTS__', $DEFAULT_TTS).
+    Replace('__LORA_SUFFIX__', $LORA_SUFFIX).
+    Replace('__GATEWAY__', $GATEWAY).
+    Replace('__LLM_NAME__', $LLM_NAME).
+    Replace('__N_GL__', $N_GL).
+    Replace('__CONTEXT__', $CONTEXT)
 
 $LauncherContent | Out-File -FilePath "$ROOT_DIR\run_laigfe.ps1" -Encoding utf8
 
