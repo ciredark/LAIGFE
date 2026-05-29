@@ -1,5 +1,5 @@
 # =============================================================================
-# LAIGFE v2.8 - Complete Windows Production Installer Build
+# LAIGFE v2.8 - Complete Windows Production Installer Build (CURL Stream Edition)
 # Local AI Multi-Modal Engine - Fully Uncensored Windows Native Deployment
 # =============================================================================
 
@@ -113,33 +113,34 @@ $BuildDesc = Read-Host "Build/Figure parameters"
 $DistDesc = Read-Host "Distinctive traits"
 $PHYSICAL_COMPILATION = "Hair: ${HairDesc:-beautiful}, Eyes: ${EyeDesc:-captivating}, Build: ${BuildDesc:-seductive}, Features: ${DistDesc:-alluring}"
 
-# === 5. Multi-Modal Weight Retrieval (Models, LoRAs, Audio) ===
-Log "Initializing asset sync loops..."
+# === 5. Multi-Modal Weight Retrieval via Native Curl ===
+Log "Initializing network asset sync loops..."
+
 function Download-File($url, $dest) {
     if (-not (Test-Path $dest)) {
-        Log "Downloading $(Split-Path $dest -Leaf)..."
-        try {
-            Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
-        } catch {
-            Warning "Download failed or interrupted for $url. Ensure connections are open."
+        Log "Streaming $(Split-Path $dest -Leaf) via native curl stream..."
+        # Bypasses PowerShell progress chokepoints by invoking the C-binary curl executable explicitly
+        Start-Process "C:\Windows\System32\curl.exe" -ArgumentList "-L", "-f", "-#", "$url", "-o", "$dest" -NoNewWindow -Wait
+        if (-not (Test-Path $dest) -or (Get-Item $dest).Length -eq 0) {
+            Warning "Download fault or empty return on asset stream: $url"
         }
     }
 }
 
 if ($GATEWAY -ne "cloud") {
-    # Download Core Model Weights
+    # Stream Big Models
     Download-File $LLM_URL "$ROOT_DIR\models\llm\$LLM_NAME"
     $CKPT_URL = if ($STYLE -match "Realistic") { $CHECKPOINT_URL_REALISM } else { $CHECKPOINT_URL_ANIME }
     Download-File $CKPT_URL "$ROOT_DIR\models\checkpoints\$CHECKPOINT_NAME"
 
-    # Multi-Modal Weights (LTX-Video and Kokoro Audio Core)
+    # Multi-Modal Foundations
     if ($RUN_VIDEO -eq "True") {
         Download-File "https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltx-video-2b-cfg.safetensors" "$ROOT_DIR\models\checkpoints\ltx-video-2b.safetensors"
     }
     Download-File "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v0_19.bn" "$ROOT_DIR\models\audio\kokoro-v0_19.bn"
     Download-File "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_bella.bin" "$ROOT_DIR\models\audio\af_bella.bin"
 
-    # Download Context-Aware LoRAs
+    # Stream LoRA Attachments
     if ($TIER_CHOICE -eq 3) {
         Download-File "https://civitai.red/api/download/models/169433?fileId=128718" "$ROOT_DIR\models\loras\shirtlift_sd15.safetensors"
         Download-File "https://civitai.red/api/download/models/183382?fileId=140848" "$ROOT_DIR\models\loras\missionary_sd15.safetensors"
@@ -149,7 +150,7 @@ if ($GATEWAY -ne "cloud") {
         if ($STYLE -match "Realistic") {
             Download-File "https://civitai.red/api/download/models/1914129?fileId=1812565" "$ROOT_DIR\models\loras\shirtlift_illustrious.safetensors"
             Download-File "https://civitai.red/api/download/models/2226345?fileId=2119439" "$ROOT_DIR\models\loras\missionary_illustrious.safetensors"
-            Download-File "https://civitai.red/api/download/models/2461583?fileId=2350117" "$ROOT_DIR\models\loras/doggy_illustrious.safetensors"
+            Download-File "https://civitai.red/api/download/models/2461583?fileId=2350117" "$ROOT_DIR\models\loras\doggy_illustrious.safetensors"
             Download-File "https://civitai.red/api/download/models/2488358?fileId=2376622" "$ROOT_DIR\models\loras\cowgirl_illustrious.safetensors"
         } else {
             $LORA_SUFFIX = "pony"
@@ -200,11 +201,9 @@ collection = client.get_or_create_collection("laigfe_hardened_memory")
 
 def sync_exchange(user_input, response_text):
     combined_payload = f"User: {user_input} \nCompanion: {response_text}"
-    # Log to flat file context stores
     with open(os.path.join(root, "Memories/interactions/chat_history.txt"), "a", encoding="utf-8") as f:
         f.write(combined_payload + "\n---\n")
     
-    # Store clean tracking hooks into vector databases to mitigate context drift
     item_id = str(len(collection.get()['ids']) + 1)
     collection.add(documents=[combined_payload], ids=[item_id])
 
@@ -250,7 +249,6 @@ if ($GATEWAY -ne "cloud") {
     $CMAKE_ARGS = "-DCMAKE_BUILD_TYPE=Release"
     if ($nvidia) { $CMAKE_ARGS += " -DGGML_CUDA=ON" } else { $CMAKE_ARGS += " -DGGML_NATIVE=ON" }
     
-    # Run native cmake compilation
     Start-Process cmake -ArgumentList ".. $CMAKE_ARGS" -NoNewWindow -Wait
     Start-Process cmake -ArgumentList "--build . --config Release -j $env:NUMBER_OF_PROCESSORS" -NoNewWindow -Wait
 
@@ -258,16 +256,13 @@ if ($GATEWAY -ne "cloud") {
     Set-Location "$ROOT_DIR\engines"
     if (-not (Test-Path "ComfyUI")) { git clone https://github.com/comfyanonymous/ComfyUI.git }
     
-    # Ingesting video/audio generation suites inside standard custom nodes directory
     Set-Location ComfyUI\custom_nodes
     if (-not (Test-Path "ComfyUI-KJNodes")) { git clone https://github.com/Kijai/ComfyUI-KJNodes.git }
     if (-not (Test-Path "comfyui-audio-processing")) { git clone https://github.com/vunb/comfyui-audio-processing.git }
     
-    # Virtual Environment Management Configuration
     Log "Compiling execution environments..."
     Start-Process python -ArgumentList "-m venv $ROOT_DIR\envs\comfyui-env" -NoNewWindow -Wait
     
-    # Install PyTorch and Python requirements inside the primary framework environment
     $pip_cmd = "$ROOT_DIR\envs\comfyui-env\Scripts\pip"
     Start-Process $pip_cmd -ArgumentList "install --upgrade pip setuptools wheel" -NoNewWindow -Wait
     if ($nvidia) {
@@ -278,7 +273,7 @@ if ($GATEWAY -ne "cloud") {
     Start-Process $pip_cmd -ArgumentList "install -r $ROOT_DIR\engines\ComfyUI\requirements.txt" -NoNewWindow -Wait
     Start-Process $pip_cmd -ArgumentList "install chromadb sentence-transformers kokoro-onnx sounddevice soundfile scipy" -NoNewWindow -Wait
 
-    # OpenWebUI App Build Execution
+    # OpenWebUI Build
     Start-Process python -ArgumentList "-m venv $ROOT_DIR\envs\openwebui-env" -NoNewWindow -Wait
     Start-Process "$ROOT_DIR\envs\openwebui-env\Scripts\pip" -ArgumentList "install open-webui" -NoNewWindow -Wait
 }
@@ -300,27 +295,23 @@ if (-not (Test-Path `$STATE_FILE)) { "$DEFAULT_TTS" | Out-File -FilePath `$STATE
 `$env:LORA_SUFFIX = "$LORA_SUFFIX"
 `$env:ROOT_DIR = `$ROOT_DIR
 
-# Cleanup routine for hung ports/subprocesses on system exit
 function CleanupJobs {
-    Log "Closing background backend service processes cleanly..."
+    Write-Host "Closing background backend service processes cleanly..." -ForegroundColor Yellow
     Get-Job | Stop-Job | Remove-Job
 }
 
-Log "Starting background model runtimes..."
+Write-Host "Starting background model runtimes..." -ForegroundColor Cyan
 if ("$GATEWAY" -ne "cloud") {
-    # Boot Local LLM Server Execution Instancing
     Start-Job -ScriptBlock {
         & "$ROOT_DIR\engines\llama.cpp\build\bin\Release\llama-server.exe" -m "$ROOT_DIR\models\llm\$LLM_NAME" --port 6118 --host 127.0.0.1 -ngl $N_GL -c $CONTEXT --parallel 1 --flash-attn auto
     } -Name "LLAMACPP" | Out-Null
 
-    # Boot Graphics and Animation Comfy Pipeline
     Start-Job -ScriptBlock {
         & "$ROOT_DIR\envs\comfyui-env\Scripts\activate.ps1"
         python "$ROOT_DIR\engines\ComfyUI\main.py" --port 8188 --listen 127.0.0.1 --input-directory "$ROOT_DIR\models" --output-directory "$ROOT_DIR\media_out"
     } -Name "COMFYUI" | Out-Null
 }
 
-# Run main user control portal
 Start-Job -ScriptBlock {
     & "$ROOT_DIR\envs\openwebui-env\Scripts\activate.ps1"
     open-webui serve --host 127.0.0.1 --port 8080
@@ -335,7 +326,6 @@ Write-Host "====================================================================
 try {
     while (`$true) {
         Start-Sleep -Seconds 2
-        # Runtime Log Interceptor Pipeline checking for voice state flag mutations
         if (Test-Path (Join-Path `$LOG_DIR "openwebui.log")) {
             `$last_line = Get-Content (Join-Path `$LOG_DIR "openwebui.log") -Tail 1
             if (`$last_line -like "*[VOICE_OFF]*") { "False" | Out-File -FilePath `$STATE_FILE -Encoding ascii }
