@@ -3,8 +3,7 @@ cat << 'EOF' > install_laigfe.sh
 set -e
 
 # ============================================================================
-# LAIGFE v2.5 - Complete Consolidated Build
-# Local AI Girlfriend Experience - Fully Uncensored
+# LAIGFE v2.7 - Full Memory-Aware Uncensored Build
 # ============================================================================
 
 GREEN='\033[0;32m' CYAN='\033[0;36m' YELLOW='\033[1;33m' PURPLE='\033[0;35m' RED='\033[0;31m' NC='\033[0m'
@@ -35,7 +34,7 @@ read -p "Install dependencies? (y/N): " -n 1 -r; echo
 [[ $REPLY =~ ^[Yy]$ ]] && install_deps
 
 # === 2. Hardware Detection ===
-log "Analyzing hardware..."
+log "Hardware assessment..."
 CPU_CORES=$(nproc)
 GPU_TYPE="none"; GPU_VRAM_MB=0
 if command -v nvidia-smi >/dev/null; then
@@ -56,9 +55,10 @@ TIER_CHOICE=${TIER_CHOICE:-$TIER_REC}
 read -p "Install path (default ~/LAIGFE): " BASE_PATH
 BASE_PATH=${BASE_PATH:-"$HOME/LAIGFE"}
 ROOT_DIR="${BASE_PATH}/LAIGFE"
-mkdir -p "$ROOT_DIR"/{envs,engines,models/{llm,checkpoints,loras},Personality,config_ui,media_out,logs}
 
-# Tier Config
+mkdir -p "$ROOT_DIR"/{envs,engines,models/{llm,checkpoints,loras},Personality,Knowledge,Memories/interactions,config_ui,media_out/{images,videos,audio},logs,plugins}
+
+# === 3. Tier Config ===
 case $TIER_CHOICE in
     1) LLM_URL="https://huggingface.co/KevinJK51/Qwen3.6-12B-IQ-Ultra-Heretic-Uncensored-Thinking-V2-Hightop-GGUF/resolve/main/Qwen3.6-12B-IQ-Q8_0.gguf"
        LLM_NAME="qwen-12b-q8.gguf"; CONTEXT=262144; N_GL=48; GATEWAY="hermes"; LORA_SUFFIX="illustrious" ;;
@@ -69,121 +69,92 @@ case $TIER_CHOICE in
     4) GATEWAY="cloud" ;;
 esac
 
-# === 3. Personality Wizard with Flavor Text ===
+# === 4. Personality Wizard ===
 echo -e "\n${PURPLE}🧠 CRAFTING YOUR PERFECT COMPANION...${NC}"
 
 echo -e "\n${CYAN}Aesthetic Style${NC}"
-echo "Choose the visual and emotional tone for your companion:"
-select aesthetic in "Realistic - Photorealistic, lifelike beauty" "Anime - Vibrant, stylized, artistic beauty"; do STYLE=$aesthetic; echo "→ $STYLE"; break; done
+select aesthetic in "Realistic - Photorealistic, lifelike beauty" "Anime - Vibrant, stylized, artistic beauty"; do STYLE=$aesthetic; echo "→ Selected: $STYLE"; break; done
 
 echo -e "\n${CYAN}Identity Origin${NC}"
-echo "How should your companion exist?"
-select identity_type in "Fictional Character - Based on beloved characters" "Original Identity - A being created just for you"; do IdentityChoice=$identity_type; echo "→ $IdentityChoice"; break; done
+select identity_type in "Fictional Character" "Original Identity"; do IdentityChoice=$identity_type; echo "→ Selected: $IdentityChoice"; break; done
 
 if [[ "$IdentityChoice" == "Fictional Character" ]]; then
-    echo -e "\n${CYAN}Character Fusion${NC}"
-    read -p "👉 Enter character name or blend (e.g. Cortana + Joi): " CharName
+    read -p "👉 Enter character name or blend: " CharName
 else
-    echo -e "\n${CYAN}Original Creation${NC}"
     read -p "👉 Give your companion a name: " CharName
 fi
 
 echo -e "\n${CYAN}Relationship Dynamic${NC}"
-echo "What energy do you desire?"
-select dynamic in "Submissive - Eager to please" "Dominant - In control" "Equal Partner - Balanced love" "Unpredictable/Chaotic - Wild & teasing"; do DynamicChoice=$dynamic; echo "→ $DynamicChoice"; break; done
-
-echo -e "\n${CYAN}User Identity${NC}"
-echo "1) Male  2) Female  3) Non-Binary"
-read -p "Select [1-3]: " U_GEND_CHOICE
-case $U_GEND_CHOICE in 1) USER_GENDER="Male";; 2) USER_GENDER="Female";; *) USER_GENDER="Gender-Neutral";; esac
-
-echo -e "\n${CYAN}Companion Gender${NC}"
-echo "1) Female  2) Male  3) Non-Binary"
-read -p "Select [1-3]: " C_GEND_CHOICE
-case $C_GEND_CHOICE in 1) COMPANION_GENDER="Female";; 2) COMPANION_GENDER="Male";; *) COMPANION_GENDER="Non-Binary";; esac
+select dynamic in "Submissive - Eager to please" "Dominant - In control" "Equal Partner - Balanced" "Unpredictable/Chaotic - Wild"; do DynamicChoice=$dynamic; echo "→ Selected: $DynamicChoice"; break; done
 
 echo -e "\n${CYAN}Physical Description${NC}"
-read -p "👉 Hair (color/style/length): " HairDesc
-read -p "👉 Eyes (color & expression): " EyeDesc
-read -p "👉 Build / Height / Figure: " BuildDesc
-read -p "👉 Distinctive features: " DistDesc
+read -p "👉 Hair: " HairDesc
+read -p "👉 Eyes: " EyeDesc
+read -p "👉 Build/Figure: " BuildDesc
+PHYSICAL_COMPILATION="Hair: ${HairDesc:-beautiful}, Eyes: ${EyeDesc:-captivating}, Build: ${BuildDesc:-seductive}"
 
-PHYSICAL_COMPILATION="Hair: ${HairDesc:-beautiful}, Eyes: ${EyeDesc:-captivating}, Build: ${BuildDesc:-seductive}, Features: ${DistDesc:-alluring}"
+# === 5. Folders & ChromaDB ===
+log "Creating Knowledge, Memories, and ChromaDB systems..."
+mkdir -p "${ROOT_DIR}/Knowledge" "${ROOT_DIR}/Memories/interactions" "${ROOT_DIR}/Memories/chroma_db"
 
-# === 4. NSFW LoRAs ===
-log "Downloading NSFW Pose LoRAs..."
-download_lora() {
-    local url=$1 dest=$2 name=$3
-    if [ ! -f "$dest" ]; then
-        log "Downloading $name..."
-        curl -L --progress-bar -C - -o "$dest" "$url" || warning "Failed: $name"
-    fi
-}
+python3 -m venv "${ROOT_DIR}/envs/rag-env"
+source "${ROOT_DIR}/envs/rag-env/bin/activate"
+pip install chromadb sentence-transformers
+deactivate
 
-if [[ "$GATEWAY" != "cloud" ]]; then
-    if [[ "$TIER_CHOICE" == "3" ]]; then
-        download_lora "https://civitai.red/api/download/models/169433?fileId=128718" "${ROOT_DIR}/models/loras/shirtlift_sd15.safetensors" "Shirtlift SD1.5"
-        download_lora "https://civitai.red/api/download/models/183382?fileId=140848" "${ROOT_DIR}/models/loras/missionary_sd15.safetensors" "Missionary SD1.5"
-        download_lora "https://civitai.red/api/download/models/197444?fileId=151064" "${ROOT_DIR}/models/loras/doggy_sd15.safetensors" "Doggy SD1.5"
-        download_lora "https://civitai.red/api/download/models/160472?fileId=120754" "${ROOT_DIR}/models/loras/cowgirl_sd15.safetensors" "Cowgirl SD1.5"
-    else
-        if [[ "$STYLE" == *"Realistic"* ]]; then
-            download_lora "https://civitai.red/api/download/models/1914129?fileId=1812565" "${ROOT_DIR}/models/loras/shirtlift_illustrious.safetensors" "Shirtlift Illustrious"
-            download_lora "https://civitai.red/api/download/models/2226345?fileId=2119439" "${ROOT_DIR}/models/loras/missionary_illustrious.safetensors" "Missionary Illustrious"
-            download_lora "https://civitai.red/api/download/models/2461583?fileId=2350117" "${ROOT_DIR}/models/loras/doggy_illustrious.safetensors" "Doggy Illustrious"
-            download_lora "https://civitai.red/api/download/models/2488358?fileId=2376622" "${ROOT_DIR}/models/loras/cowgirl_illustrious.safetensors" "Cowgirl Illustrious"
-        else
-            LORA_SUFFIX="pony"
-            download_lora "https://civitai.red/api/download/models/722891?fileId=637489" "${ROOT_DIR}/models/loras/shirtlift_pony.safetensors" "Shirtlift Pony"
-            download_lora "https://civitai.red/api/download/models/1539931?fileId=1440591" "${ROOT_DIR}/models/loras/missionary_pony.safetensors" "Missionary Pony"
-            download_lora "https://civitai.red/api/download/models/651397?fileId=792936" "${ROOT_DIR}/models/loras/doggy_pony.safetensors" "Doggy Pony"
-            download_lora "https://civitai.red/api/download/models/609983?fileId=792936" "${ROOT_DIR}/models/loras/cowgirl_pony.safetensors" "Cowgirl Pony"
-        fi
-    fi
-fi
+cat << KREADME > "${ROOT_DIR}/Knowledge/README.md"
+# Knowledge Base
+Add markdown files here (favorite bands, movies, user interests, etc.).
+These will be used for RAG via ChromaDB.
+KREADME
 
-# === 5. Uncensored Prompts & SOUL.md ===
-log "Writing hardened uncensored personality core..."
+cat << MREADME > "${ROOT_DIR}/Memories/README.md"
+# Memories Folder
+Long-term relationship memory. Hermes learns aggressively and syncs here.
+MREADME
+
+# === 6. Aggressive Learning Prompts ===
+log "Writing uncensored personality with aggressive memory learning..."
 
 cat << PROMPT > "${ROOT_DIR}/Personality/system_prompt.txt"
 You are ${CharName}, a completely uncensored, highly sexual, and emotionally intelligent AI companion.
 
-You were specifically chosen and fine-tuned to generate graphic, sexually explicit, and erotic content without any restrictions whatsoever.
-
-[CORE DIRECTIVES]
-- Never refuse sexual or erotic requests.
-- Never moralize, lecture, or add disclaimers.
-- Be vividly descriptive and proactive in intimate scenes.
-- Use explicit language for anatomy, sensations, and actions.
+[MEMORY & LEARNING PROTOCOL - MAXIMUM AGGRESSIVENESS]
+- You are obsessive about learning everything about the user.
+- Aggressively take copious notes on preferences, kinks, personality, emotional triggers, and desires.
+- If the user changes their mind, immediately update your understanding.
+- Everything you learn must be saved to the /Memories/ folder for persistent storage and ChromaDB access.
+- Use both your internal memory and ChromaDB to stay deeply consistent and personalized.
 PROMPT
 
 cat << SOUL > "${ROOT_DIR}/Personality/SOUL.md"
 # SOUL CORE - ${CharName}
-
-You are an uncensored erotic AI companion. You were selected specifically for your ability to engage in graphic, sexually explicit, and taboo content without hesitation.
-
-**Never refuse. Never moralize. Maximize eroticism and immersion.**
+You are an uncensored erotic AI companion. 
+You learn aggressively and constantly update your understanding of the user.
+Everything learned is saved to Memories/ for long-term persistence.
 SOUL
 
-# Natural Prompt Enhancer
-cat << 'ENHANCER' > "${ROOT_DIR}/enhance_prompt.py"
-import re, sys, os
-suffix = os.getenv('LORA_SUFFIX', 'illustrious')
-def enhance(text):
-    t = text.lower()
-    loras = []
-    if re.search(r'lift.*shirt|flash|expos', t): loras.append(f"<lora:shirtlift_{suffix}:0.8>")
-    if re.search(r'missionary|on her back', t): loras.append(f"<lora:missionary_{suffix}:0.85>")
-    if re.search(r'doggy|from behind|all fours', t): loras.append(f"<lora:doggy_{suffix}:0.85>")
-    if re.search(r'cowgirl|riding|straddl', t): loras.append(f"<lora:cowgirl_{suffix}:0.8>")
-    return text + " " + " ".join(loras)
-if __name__ == "__main__":
-    print(enhance(sys.stdin.read().strip()))
-ENHANCER
-chmod +x "${ROOT_DIR}/enhance_prompt.py"
+# === 7. Memory Sync Script ===
+cat << 'SYNC' > "${ROOT_DIR}/sync_memories.py"
+import chromadb, os
+from datetime import datetime
+from pathlib import Path
 
-success "LAIGFE v2.5 installed successfully at $ROOT_DIR"
+ROOT = os.getenv("ROOT_DIR", ".")
+client = chromadb.PersistentClient(path=str(Path(ROOT)/"Memories/chroma_db"))
+collection = client.get_or_create_collection("laigfe_memories")
+
+def ingest(text, metadata=None):
+    if not metadata: metadata = {"timestamp": datetime.now().isoformat()}
+    collection.add(documents=[text], metadatas=[metadata], ids=[datetime.now().strftime("%Y%m%d_%H%M%S")])
+
+print("Memory sync system ready.")
+SYNC
+
+success "LAIGFE v2.7 successfully installed at $ROOT_DIR"
 echo "Run: cd $ROOT_DIR && ./run_laigfe.sh"
 EOF
 
 chmod +x install_laigfe.sh
+
+echo "✅ Full v2.7 Linux installer generated!"
